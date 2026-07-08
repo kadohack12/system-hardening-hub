@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # hardening-patch.sh - Script de durcissement système (Niveau Production)
-# Auteur : [Votre Nom / GitHub]
+# Auteur : Kadohack12
 #
 # Ce script doit être exécuté avec les privilèges root.
 # Options disponibles :
