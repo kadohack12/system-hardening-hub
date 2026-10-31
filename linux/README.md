@@ -30,3 +30,23 @@ sudo ./scripts/hardening-patch.sh
 ```
 
 Les modifications seront journalisées dans `/var/log/system_hardening.log` et les fichiers originaux sauvegardés sous `/var/backup/`.
+
+## Automatisation avec Ansible
+
+Pour déployer le durcissement sur plusieurs machines, un playbook idempotent est
+fourni dans [ansible/hardening.yml](ansible/hardening.yml). Il applique les mêmes
+règles que le script (sysctl, sshd_config, umask) mais de façon rejouable.
+
+```bash
+# Copier l'inventaire d'exemple et l'adapter
+cp ansible/inventory.example.ini ansible/inventory.ini
+
+# Simulation (--check)
+ansible-playbook -i ansible/inventory.ini ansible/hardening.yml --check
+
+# Application
+ansible-playbook -i ansible/inventory.ini ansible/hardening.yml
+```
+
+La validation `sshd -t` est intégrée via l'argument `validate` des tâches
+`lineinfile` : une configuration SSH invalide n'est jamais écrite.

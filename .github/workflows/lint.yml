@@ -1,0 +1,54 @@
+name: Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bash:
+    name: Bash / ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verification syntaxique
+        run: |
+          set -e
+          find linux -name '*.sh' -print0 | xargs -0 -n1 bash -n
+      - name: ShellCheck
+        run: |
+          set -e
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck
+          find linux -name '*.sh' -print0 | xargs -0 -n1 shellcheck
+
+  powershell:
+    name: PowerShell / PSScriptAnalyzer
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Analyse statique
+        shell: pwsh
+        run: |
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+          $issues = Invoke-ScriptAnalyzer -Path windows/scripts -Recurse -Severity Error
+          $issues | Format-Table -AutoSize
+          if ($issues.Count -gt 0) { exit 1 }
+
+  ansible:
+    name: Ansible / ansible-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: ansible-lint
+        run: |
+          pip install ansible-core ansible-lint
+          ansible-lint linux/ansible/hardening.yml

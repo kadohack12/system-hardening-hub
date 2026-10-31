@@ -1,0 +1,68 @@
+; Modèle de sécurité Windows (format identique à celui utilisé par les GPO).
+;
+; Application locale :
+;   secedit /configure /db %TEMP%\hardening.sdb /cfg local-security-policy.inf /areas SECURITYPOLICY
+;
+; Import dans une GPO de domaine (sur un contrôleur de domaine, PowerShell) :
+;   $gpo = New-GPO -Name "Hardening-Baseline"
+;   secedit /export /cfg baseline.inf /areas SECURITYPOLICY   ; puis fusionner
+;   (ou importer via la console GPMC : Configuration ordinateur > Paramètres Windows
+;    > Paramètres de sécurité > clic droit > Importer la stratégie)
+
+[Unicode]
+Unicode=yes
+
+[Version]
+signature="$CHICAGO$"
+Revision=1
+
+[System Access]
+; Politique de mot de passe
+MinimumPasswordLength = 14
+PasswordComplexity = 1
+PasswordHistorySize = 24
+MaximumPasswordAge = 365
+MinimumPasswordAge = 1
+; Politique de verrouillage de compte
+LockoutBadCount = 5
+ResetLockoutCount = 15
+LockoutDuration = 15
+; Renommer le compte administrateur (défense en profondeur)
+NewAdministratorName = "SecAdmin"
+NewGuestName = "SecGuest"
+EnableGuestAccount = 0
+ClearTextPassword = 0
+
+[Event Audit]
+; 0 = aucun, 1 = succès, 2 = échec, 3 = succès et échec
+AuditSystemEvents = 3
+AuditLogonEvents = 3
+AuditObjectAccess = 2
+AuditPrivilegeUse = 2
+AuditPolicyChange = 3
+AuditAccountManage = 3
+AuditProcessTracking = 0
+AuditDSAccess = 2
+AuditAccountLogon = 3
+
+[Registry Values]
+; SMBv1 désactivé et signature SMB obligatoire
+MACHINE\System\CurrentControlSet\Services\LanmanServer\Parameters\SMB1=4,0
+MACHINE\System\CurrentControlSet\Services\LanmanServer\Parameters\RequireSecuritySignature=4,1
+MACHINE\System\CurrentControlSet\Services\LanmanWorkstation\Parameters\RequireSecuritySignature=4,1
+; LLMNR désactivé
+MACHINE\Software\Policies\Microsoft\Windows NT\DNSClient\EnableMulticast=4,0
+; WDigest : pas de mot de passe en clair en mémoire
+MACHINE\System\CurrentControlSet\Control\SecurityProviders\WDigest\UseLogonCredential=4,0
+; Protection LSA (LSA Protection)
+MACHINE\System\CurrentControlSet\Control\Lsa\RunAsPPL=4,1
+; Autorun désactivé
+MACHINE\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer\NoAutorun=4,1
+MACHINE\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer\NoDriveTypeAutoRun=4,255
+
+[Privilege Rights]
+; Refuser l'accès réseau au compte local Administrateur et invité
+SeDenyNetworkLogonRight = *S-1-5-32-546
+SeDenyInteractiveLogonRight = *S-1-5-32-546
+; Accorder le logon réseau au groupe Administrateurs et Utilisateurs
+SeNetworkLogonRight = *S-1-5-32-544,*S-1-5-32-545

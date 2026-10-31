@@ -1,0 +1,77 @@
+---
+# Durcissement Linux idempotent — équivalent Ansible de scripts/hardening-patch.sh.
+#
+# Utilisation :
+#   ansible-playbook -i inventory.example.ini hardening.yml --check   # simulation
+#   ansible-playbook -i inventory.example.ini hardening.yml
+#
+# Le playbook est idempotent : un second passage ne signale aucun changement.
+
+- name: Durcissement Linux de base
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    ssh_permit_root_login: "prohibit-password"
+    ssh_max_auth_tries: 4
+    default_umask: "027"
+
+  tasks:
+    # --- 1. Réseau (sysctl) ------------------------------------------------
+    - name: Durcissement réseau via sysctl
+      ansible.posix.sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        sysctl_file: /etc/sysctl.d/99-hardening.conf
+        state: present
+        reload: true
+      loop:
+        - { name: net.ipv4.tcp_syncookies, value: "1" }
+        - { name: net.ipv4.conf.all.rp_filter, value: "1" }
+        - { name: net.ipv4.conf.default.rp_filter, value: "1" }
+        - { name: net.ipv4.conf.all.accept_redirects, value: "0" }
+        - { name: net.ipv4.conf.default.accept_redirects, value: "0" }
+        - { name: net.ipv4.conf.all.secure_redirects, value: "0" }
+        - { name: net.ipv4.conf.default.secure_redirects, value: "0" }
+        - { name: net.ipv4.conf.all.send_redirects, value: "0" }
+        - { name: net.ipv4.conf.default.send_redirects, value: "0" }
+        - { name: net.ipv4.conf.all.accept_source_route, value: "0" }
+        - { name: net.ipv4.conf.default.accept_source_route, value: "0" }
+        - { name: fs.suid_dumpable, value: "0" }
+        - { name: kernel.randomize_va_space, value: "2" }
+
+    # --- 2. SSH ------------------------------------------------------------
+    # NB : la directive "Protocol" a été retirée d'OpenSSH >= 7.6 et n'est
+    # volontairement pas gérée ici (elle casserait sshd -t).
+    - name: Durcissement sshd_config
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^#?\\s*{{ item.key }}\\s"
+        line: "{{ item.key }} {{ item.value }}"
+        state: present
+        validate: "/usr/sbin/sshd -t -f %s"
+      loop:
+        - { key: PermitRootLogin, value: "{{ ssh_permit_root_login }}" }
+        - { key: MaxAuthTries, value: "{{ ssh_max_auth_tries }}" }
+        - { key: X11Forwarding, value: "no" }
+        - { key: ClientAliveInterval, value: "300" }
+        - { key: ClientAliveCountMax, value: "2" }
+        - { key: IgnoreRhosts, value: "yes" }
+        - { key: PermitEmptyPasswords, value: "no" }
+      notify: Redémarrer SSH
+
+    # --- 3. Umask ----------------------------------------------------------
+    - name: Configurer l'umask par défaut
+      ansible.builtin.lineinfile:
+        path: /etc/login.defs
+        regexp: '^UMASK'
+        line: "UMASK           {{ default_umask }}"
+        state: present
+
+  handlers:
+    - name: Redémarrer SSH
+      ansible.builtin.service:
+        # Debian/Ubuntu : "ssh" ; RHEL/CentOS : "sshd".
+        name: "{{ 'ssh' if ansible_os_family == 'Debian' else 'sshd' }}"
+        state: restarted
