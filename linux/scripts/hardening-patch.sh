@@ -70,9 +70,9 @@ set_ssh_config() {
     backup_file "$config_file"
 
     # Vérifie si la clé est déjà configurée (qu'elle soit commentée ou non)
-    if grep -qE "^[#[:space:]]*$key[[:space:]]" "$config_file"; then
+    if grep -qE "^[#[:space:]]*${key}[[:space:]]" "$config_file"; then
         # Remplace la ligne existante
-        sed -i -E "s|^[#[:space:]]*($key[[:space:]]+).*|\1$value|" "$config_file"
+        sed -i -E "s|^[#[:space:]]*(${key}[[:space:]]+).*|\1$value|" "$config_file"
     else
         # Ajoute la configuration si elle n'existe pas du tout
         echo "$key $value" >> "$config_file"

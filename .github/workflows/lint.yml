@@ -51,4 +51,5 @@ jobs:
       - name: ansible-lint
         run: |
           pip install ansible-core ansible-lint
+          ansible-galaxy collection install -r linux/ansible/requirements.yml
           ansible-lint linux/ansible/hardening.yml
