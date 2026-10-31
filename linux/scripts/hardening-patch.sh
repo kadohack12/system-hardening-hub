@@ -70,9 +70,9 @@ set_ssh_config() {
     backup_file "$config_file"
 
     # Vérifie si la clé est déjà configurée (qu'elle soit commentée ou non)
-    if grep -qE "^[#[:space:]]*$key[[:space:]]" "$config_file"; then
+    if grep -qE "^[#[:space:]]*${key}[[:space:]]" "$config_file"; then
         # Remplace la ligne existante
-        sed -i -E "s|^[#[:space:]]*($key[[:space:]]+).*|\1$value|" "$config_file"
+        sed -i -E "s|^[#[:space:]]*(${key}[[:space:]]+).*|\1$value|" "$config_file"
     else
         # Ajoute la configuration si elle n'existe pas du tout
         echo "$key $value" >> "$config_file"
@@ -117,9 +117,10 @@ EOF
 # ==========================================
 apply_ssh_hardening() {
     log "[Étape 2] Sécurisation de la configuration SSH..."
-    
-    # Règle de sécurité stricte
-    set_ssh_config "Protocol" "2"
+
+    # La directive "Protocol 2" a été supprimée d'OpenSSH depuis la version 7.6 :
+    # la laisser dans sshd_config fait échouer "sshd -t" et bloque le redémarrage.
+    # Le protocole 2 est de toute façon le seul supporté désormais.
     set_ssh_config "PermitRootLogin" "prohibit-password" # Utilisation des clés SSH uniquement pour root
     set_ssh_config "MaxAuthTries" "4"
     set_ssh_config "X11Forwarding" "no"
@@ -129,16 +130,23 @@ apply_ssh_hardening() {
     set_ssh_config "PermitEmptyPasswords" "no"
 
     if [ "$DRY_RUN" = false ]; then
-        # Validation syntaxique de la configuration SSH avant de redémarrer le démon
-        if sshd -t; then
-            systemctl restart sshd
-            log "[SSH] Service SSHD testé et redémarré avec succès."
-        else
+        # Valider la syntaxe avant tout redémarrage : si elle est invalide on
+        # restaure immédiatement pour ne jamais laisser un sshd cassé.
+        if ! sshd -t; then
             log "[ERREUR] La configuration SSH générée contient des erreurs. Restauration du fichier d'origine..."
             cp -pf "$BACKUP_DIR/sshd_config.bak" "/etc/ssh/sshd_config"
-            systemctl restart sshd
             exit 1
         fi
+
+        # Debian/Ubuntu nomment l'unité "ssh", RHEL/CentOS "sshd" : cibler celle
+        # qui existe, sinon le redémarrage échoue silencieusement.
+        if systemctl list-unit-files --type=service 2>/dev/null | grep -q '^ssh\.service'; then
+            ssh_unit="ssh"
+        else
+            ssh_unit="sshd"
+        fi
+        systemctl restart "$ssh_unit"
+        log "[SSH] Configuration validée et service $ssh_unit redémarré avec succès."
     else
         log "[DRY-RUN] Devrait valider la syntaxe et redémarrer sshd."
     fi

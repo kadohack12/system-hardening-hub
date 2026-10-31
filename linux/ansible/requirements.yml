@@ -1,0 +1,6 @@
+---
+# Collections requises par hardening.yml.
+#   ansible-galaxy collection install -r linux/ansible/requirements.yml
+collections:
+  - name: ansible.posix
+    version: ">=1.5.0"
